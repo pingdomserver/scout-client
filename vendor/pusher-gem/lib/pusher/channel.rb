@@ -148,7 +148,7 @@ module Pusher
         end
       end
 
-      request = Pusher::Request.new(:post, @uri + 'events', params, body)
+      Pusher::Request.new(:post, @uri + 'events', params, body)
     end
   end
 end

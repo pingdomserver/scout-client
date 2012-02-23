@@ -173,7 +173,7 @@ module Scout
         debug "Loading history file..."
         contents=File.read(@history_file)
         @history = YAML.load(contents)
-      rescue => e
+      rescue
         info "Couldn't load or parse the history file at #{@history_file}. Exiting."
         exit(1)
       end
