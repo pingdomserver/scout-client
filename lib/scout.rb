@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby -wKU
 require "scout/version"
 
+require "scout/client_hostname"
 require "scout/command"
 require "scout/plugin"
 require "scout/plugin_options"

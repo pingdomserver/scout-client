@@ -11,7 +11,7 @@ module Scout
     class APITimeoutError < RuntimeError; end
 
     HTTP_HEADERS = { "Client-Version"  => Scout::VERSION,
-                     "Client-Hostname" => Socket.gethostname}
+                     "Client-Hostname" => Scout::CLIENT_HOSTNAME }
 
     class Troubleshoot < Command
       

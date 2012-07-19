@@ -16,7 +16,7 @@ module Scout
 
     # Headers passed up with all API requests.
     HTTP_HEADERS = { "Client-Version"  => Scout::VERSION,
-                     "Client-Hostname" => Socket.gethostname,
+                     "Client-Hostname" => Scout::CLIENT_HOSTNAME,
                      "Accept-Encoding" => "gzip" }
 
 
