@@ -57,7 +57,6 @@ module Scout
           options[:roles] = roles
         end
 
-
         opts.on( "-s", "--server SERVER", String,
                  "The URL for the server to report to." ) do |url|
           options[:server] = url
@@ -90,6 +89,10 @@ module Scout
         opts.on("--hostname HOSTNAME", String,
                 "Optionally override the hostname." ) do |hostname|
           options[:hostname] = hostname
+        end
+
+        opts.on( "-e", "--environment ENVIRONMENT", String, "Environment for this server. Environments are defined through scoutapp.com's web UI" ) do |environment|
+          options[:environment] = environment
         end
 
         opts.separator " "
@@ -178,6 +181,7 @@ module Scout
       @http_proxy     = options[:http_proxy] || ""
       @https_proxy    = options[:https_proxy] || ""
       @hostname       = options[:hostname] || Socket.gethostname
+      @environment    = options[:environment] || ""
       @options = options
       @args    = args
 

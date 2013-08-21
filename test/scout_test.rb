@@ -15,6 +15,11 @@ require 'newrelic_rpm'
 require "pty"
 require "expect"
 require 'test/unit'
+begin
+  require 'pry'
+rescue LoadError
+  # not using pry
+end
 # must be loaded after 
 $LOAD_PATH << File.expand_path( File.dirname(__FILE__) + '/../lib' )
 $LOAD_PATH << File.expand_path( File.dirname(__FILE__) + '/..' )
@@ -41,7 +46,7 @@ end
 
 class ScoutTest < Test::Unit::TestCase
   def setup
-    load_fixtures :clients, :accounts, :plugins, :subscriptions, :plugin_metas, :roles, :plugin_templates, :notification_groups
+    load_fixtures :accounts, :notification_groups, :environments, :clients, :plugins, :subscriptions, :plugin_metas, :roles, :plugin_templates
     clear_tables :plugin_activities, :ar_descriptors, :summaries, :clients_roles
     clear_working_dir
     
@@ -601,6 +606,22 @@ myurl=http://foo.com?foo=bar
     scout(@roles_account.key, "--hostname", hostname_override)
     client=@roles_account.clients.last
     assert_equal hostname_override, client.hostname
+  end
+
+  def test_environment_argument_with_new_client
+    staging = @roles_account.environments.find_by_name("staging")
+    scout(@roles_account.key, "--environment", staging.name)
+    @client = @roles_account.clients.last
+    assert_equal staging, @client.environment
+  end
+
+  def test_environment_argument_with_existing_client
+    test_environment_argument_with_new_client
+    File.unlink(File.join(AGENT_DIR,"scout_client_pid.txt")) # needed because the "scout" test method leaves the PID file around
+    production = @roles_account.environments.find_by_name("production")
+    scout(@roles_account.key, "--environment", production.name, "--force")
+    @client.reload
+    assert_equal production, @client.environment
   end
 
   def test_create_cron_script

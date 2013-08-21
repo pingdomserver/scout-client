@@ -27,7 +27,7 @@ module Scout
     attr_reader :client_key
 
     # Creates a new Scout Server connection.
-    def initialize(server, client_key, history_file, logger = nil, server_name=nil, http_proxy='', https_proxy='', roles='', hostname = nil)
+    def initialize(server, client_key, history_file, logger=nil, server_name=nil, http_proxy='', https_proxy='', roles='', hostname=nil, environment='')
       @server       = server
       @client_key   = client_key
       @history_file = history_file
@@ -38,6 +38,7 @@ module Scout
       @https_proxy  = https_proxy
       @roles        = roles || ''
       @hostname     = hostname
+      @environment  = environment
       @plugin_plan  = []
       @plugins_with_signature_errors = []
       @directives   = {} # take_snapshots, interval, sleep_interval
@@ -60,7 +61,7 @@ module Scout
     def refresh?
       return true if !ping_key or account_public_key_changed? # fetch the plan again if the account key is modified/created
 
-      url=URI.join( @server.sub("https://","http://"), "/clients/#{ping_key}/ping.scout?roles=#{@roles}&hostname=#{URI.encode(@hostname)}")
+      url=URI.join( @server.sub("https://","http://"), "/clients/#{ping_key}/ping.scout?roles=#{@roles}&hostname=#{URI.encode(@hostname)}&env=#{URI.encode(@environment)}")
 
       headers = {"x-scout-tty" => ($stdin.tty? ? 'true' : 'false')}
       if @history["plan_last_modified"] and @history["old_plugins"]

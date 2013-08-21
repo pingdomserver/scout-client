@@ -28,7 +28,7 @@ module Scout
                "/clients/CLIENT_KEY/#{url_name}.scout".
                    gsub(/\bCLIENT_KEY\b/, @client_key).
                    gsub(/\b[A-Z_]+\b/) { |k| options[k.downcase.to_sym] || k })
-      uri.query = ["roles=#{@roles}","hostname=#{URI.encode(@hostname)}","tty=#{$stdin.tty? ? 'y' : 'n'}"].join('&')
+      uri.query = ["roles=#{@roles}","hostname=#{URI.encode(@hostname)}","env=#{URI.encode(@environment)}","tty=#{$stdin.tty? ? 'y' : 'n'}"].join('&')
       uri
     end
 

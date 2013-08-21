@@ -1,3 +1,7 @@
+# 5.7.0
+
+* Added support for environments
+
 # 5.6.11
 
 * Remove the scout_streamer.pid file after the realtime processes has expired.

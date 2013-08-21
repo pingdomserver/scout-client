@@ -104,7 +104,7 @@ module Scout
         end
 
         def test_server_connection(key)
-          Scout::Server.new(server, key, history, log, server_name, @http_proxy, @https_proxy, @roles, @hostname) do |scout|
+          Scout::Server.new(server, key, history, log, server_name, @http_proxy, @https_proxy, @roles, @hostname, @environment) do |scout|
             scout.fetch_plan
             scout.run_plugins_by_plan
           end
