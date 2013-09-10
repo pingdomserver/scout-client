@@ -61,7 +61,7 @@ module Scout
 
             if Environment.rvm?
               file.puts '# Loading the RVM Environment files.'
-              file.puts "source #{Environment.rvm_path}\n"
+              file.puts "source #{Environment.rvm_path_instructions}\n"
             end
 
             if Environment.bundler?
@@ -79,7 +79,15 @@ module Scout
         end
 
         def special_cron_information
-          "It looks like you've installed Scout under RVM and/or Bundler. We've generated a shell script for you." if cron_script_required?
+          info = ""
+          info += "It looks like you've installed Scout under RVM and/or Bundler. We've generated a shell script for you." if cron_script_required?
+
+          if Environment.old_rvm_version?
+            info += "\n\n1. CONFIGURE THE SCOUT SHELL SCRIPT\n\n"
+            info += "Edit the shell script at #{File.join(config_dir, "scout_cron.sh")} and replace [PATH TO RVM ENVIRONMENT FILE] with the path to your RVM environment file. Usually this is located at #{(File.expand_path("~") rescue "/home/[USER]")}/.rvm/environments/[RUBY VERSION].\n\n"
+            info += "2. ADD A CRON JOB FOR SCOUT"
+          end
+          info
         end
 
         def cron_command(key)
