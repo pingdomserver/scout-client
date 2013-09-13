@@ -73,6 +73,7 @@ module Scout
 
         bundle={:hostname=>hostname,
                  :server_time=>Time.now.strftime("%I:%M:%S %p"),
+                 :server_unixtime => Time.now.to_i,
                  :num_processes=>`ps -e | wc -l`.chomp.to_i,
                  :plugins=>plugins }
 
