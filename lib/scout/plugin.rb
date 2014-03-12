@@ -205,6 +205,8 @@ module Scout
 
           report(name => result)
         end
+      else # report nil to reserve the metric name in rrd
+        report(name => nil)
       end
 
       remember("_counter_#{name}" => { :time => current_time, :value => value })
