@@ -9,7 +9,7 @@ module Scout
 
     # * history_file is the *path* to the history file
     # * plugin_ids is an array of integers
-    def initialize(history_file, streaming_key, p_app_id, p_key, p_secret, plugin_ids, hostname, http_proxy, logger = nil)
+    def initialize(history_file, streaming_key, p_app_id, p_key, p_secret, plugin_ids, system_metric_collectors, hostname, http_proxy, logger = nil)
       @@continue_streaming = true
       @history_file = history_file
       @history      = Hash.new
@@ -42,40 +42,16 @@ module Scout
       # main loop. Continue running until global $continue_streaming is set to false OR we've been running for MAX DURATION
       iteration=1 # use this to log the data at a couple points
       while(streamer_start_time+MAX_DURATION > Time.now && @@continue_streaming) do
-        plugins=[]
-        selected_plugins.each_with_index do |plugin_hash,i|
-          # create an actual instance of the plugin
-          plugin=get_instance_of(plugin_hash)
+        plugins = gather_plugin_reports(selected_plugins)
 
-          start_time=Time.now
-
-          data = {}
-          begin
-            Timeout.timeout(30, PluginTimeoutError) do
-              data = plugin.run
-            end
-          rescue Timeout::Error, PluginTimeoutError
-            error "Plugin took too long to run."
-          end
-
-          duration=((Time.now-start_time)*1000).to_i
-
-          id_and_name = plugin_hash['id_and_name']
-          @history["last_runs"][id_and_name] = start_time
-          @history["memory"][id_and_name]    = data[:memory]
-
-          plugins << {:duration=>duration,
-                     :fields=>plugin.reports.inject{|memo,hash|memo.merge(hash)},
-                     :name=>plugin_hash['name'],
-                     :id=>plugin_hash['id'],
-                     :class=>plugin_hash['code_class']}
-        end
+        system_metric_data = gather_system_metric_reports(system_metric_collectors)
 
         bundle={:hostname=>hostname,
                  :server_time=>Time.now.strftime("%I:%M:%S %p"),
                  :server_unixtime => Time.now.to_i,
                  :num_processes=>`ps -e | wc -l`.chomp.to_i,
-                 :plugins=>plugins }
+                 :plugins=>plugins, 
+                 :system_metrics => system_metric_data}
 
         # stream the data via pusherapp
         begin
@@ -104,6 +80,59 @@ module Scout
     
     private
 
+    def gather_plugin_reports(selected_plugins)
+      plugins = []
+      selected_plugins.each_with_index do |plugin_hash, i|
+        # create an actual instance of the plugin
+        plugin = get_instance_of(plugin_hash)
+        start_time = Time.now
+
+        data = {}
+        begin
+          Timeout.timeout(30, PluginTimeoutError) do
+            data = plugin.run
+          end
+        rescue Timeout::Error, PluginTimeoutError
+          error "Plugin took too long to run."
+        end
+        duration = ((Time.now-start_time) * 1000).to_i
+
+        id_and_name = plugin_hash['id_and_name']
+        @history["last_runs"][id_and_name] = start_time
+        @history["memory"][id_and_name]    = data[:memory]
+
+        plugins << { :duration => duration,
+                     :fields => plugin.reports.inject{|memo,hash|memo.merge(hash)},
+                     :name => plugin_hash['name'],
+                     :id => plugin_hash['id'],
+                     :class => plugin_hash['code_class'] }
+      end
+      plugins
+    end
+
+    def gather_system_metric_reports(system_metric_collectors)
+      system_metric_data = {}
+      all_collectors = { :disk      => ServerMetrics::Disk,
+                         :cpu       => ServerMetrics::Cpu,
+                         :memory    => ServerMetrics::Memory,
+                         :network   => ServerMetrics::Network,
+                         :processes => ServerMetrics::Processes }
+
+      realtime_collectors = all_collectors.select { |key, klass| system_metric_collectors.include?(key) }
+      realtime_collectors.each_pair do |key, klass|
+        begin
+          collector_previous_run = @history[:server_metrics][key]
+          collector = collector_previous_run.is_a?(Hash) ? klass.from_hash(collector_previous_run) : klass.new() # continue with last run, or just create new
+          system_metric_data[key] = collector.run
+          @history[:server_metrics][key] = collector.to_hash # store its state for next time
+        rescue Exception => e
+          raise if e.is_a?(SystemExit)
+          error "Problem running server/#{key} metrics: #{e.message}: \n#{e.backtrace.join("\n")}"
+        end
+      end
+      system_metric_data
+    end
+      
     # Compile instances of the plugins specified in the passed plugin_ids
     def compile_plugins(all_plugins,plugin_ids)
       num_classes_compiled=0

@@ -1,3 +1,7 @@
+# 5.8.9
+
+* Added support for realtime system metrics (processes, cpu, memory, disks, network devices)
+
 # 5.8.8
 
 * Counters report nil values on initial report, rather than not reporting
