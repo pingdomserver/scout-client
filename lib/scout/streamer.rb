@@ -33,7 +33,7 @@ module Scout
 
       # get the array of plugins, AKA the plugin plan
       @all_plugins = Array(@history["old_plugins"])
-      info("Starting streamer with key=#{streaming_key} and plugin_ids: #{plugin_ids.inspect}. #{@history_file} includes plugin ids #{@all_plugins.map{|p|p['id']}.inspect}. http_proxy = #{http_proxy}")
+      info("Starting streamer with key=#{streaming_key} and plugin_ids: #{plugin_ids.inspect}. System metric collectors: #{system_metric_collectors.inspect}. #{@history_file} includes plugin ids #{@all_plugins.map{|p|p['id']}.inspect}. http_proxy = #{http_proxy}")
 
       # selected_plugins is subset of the @all_plugins -- those selected in plugin_ids
       selected_plugins = compile_plugins(@all_plugins, plugin_ids)

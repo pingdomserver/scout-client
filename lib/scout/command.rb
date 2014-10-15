@@ -97,6 +97,14 @@ module Scout
           options[:environment] = environment
         end
 
+        opts.on( "--nagios [NRPE CONFIG PATH]", "Run Nagios plugins defined in the specified NRPE config file. If no path is provided, plugins are loaded from '/etc/nagios/nrpe.cfg'." ) do |nrpe_config_file_path|
+          options[:nrpe_config_file_path] = nrpe_config_file_path || '/etc/nagios/nrpe.cfg'
+        end
+
+        opts.on( "--munin [MUNIN PLUGIN PATH]", "Load Munin plugins from the specified path. If no path is provided, plugins are loaded from '/etc/munin/plugins'." ) do |munin_plugin_path|
+          options[:munin_plugin_path] = munin_plugin_path || '/etc/munin/plugins'
+        end
+
         opts.separator " "
         opts.separator "Common Options:"
         opts.separator "--------------------------------------------------------------------------"
@@ -184,6 +192,8 @@ module Scout
       @https_proxy    = options[:https_proxy] || ""
       @hostname       = options[:hostname] || Socket.gethostname
       @environment    = options[:environment] || ""
+      @munin_plugin_path = options[:munin_plugin_path]
+      @nrpe_config_file_path = options[:nrpe_config_file_path]
       @options = options
       @args    = args
 
