@@ -1,14 +1,13 @@
-
 Dir.glob(File.join(File.dirname(__FILE__), *%w[.. .. vendor *])).each do |dir|
   $LOAD_PATH << File.join(dir,"lib")
 end
-
 require "multi_json"
 require "pusher"
 require "httpclient"
 
 module Scout
   class Server < Scout::ServerBase
+    include ThirdPartyPlugins
     # 
     # A plugin cannot take more than DEFAULT_PLUGIN_TIMEOUT seconds to execute, 
     # otherwise, a timeout error is generated.  This can be overriden by
@@ -28,7 +27,7 @@ module Scout
     attr_reader :client_key
 
     # Creates a new Scout Server connection.
-    def initialize(server, client_key, history_file, logger=nil, server_name=nil, http_proxy='', https_proxy='', roles='', hostname=nil, environment='')
+    def initialize(server, client_key, history_file, logger=nil, server_name=nil, http_proxy='', https_proxy='', roles='', hostname=nil, environment='', munin_plugin_path, nrpe_config_file_path)
       @server       = server
       @client_key   = client_key
       @history_file = history_file
@@ -40,6 +39,8 @@ module Scout
       @roles        = roles || ''
       @hostname     = hostname
       @environment  = environment
+      @munin_plugin_path = munin_plugin_path
+      @nrpe_config_file_path = nrpe_config_file_path
       @plugin_plan  = []
       @plugins_with_signature_errors = []
       @directives   = {} # take_snapshots, interval, sleep_interval
@@ -146,8 +147,8 @@ module Scout
 
             @new_plan = true # used in determination if we should checkin this time or not
 
-            # Add local plugins to the plan.
             @plugin_plan += get_local_plugins
+            @plugin_plan += get_third_party_plugins
           rescue Exception =>e
             fatal "Plan from server was malformed: #{e.message} - #{e.backtrace}"
             exit
@@ -157,6 +158,7 @@ module Scout
         info "Plan not modified."
         @plugin_plan = Array(@history["old_plugins"])
         @plugin_plan += get_local_plugins
+        @plugin_plan += get_third_party_plugins
         @directives = @history["directives"] || Hash.new
 
       end
@@ -393,34 +395,40 @@ module Scout
             plugin['origin'] = nil
           end
         end
-        debug "Compiling plugin..."
-        begin
-          eval( code_to_run,
-                TOPLEVEL_BINDING,
-                plugin['path'] || plugin['name'] )
-          info "Plugin compiled."
-        rescue Exception
-          raise if $!.is_a? SystemExit
-          error "Plugin #{plugin['path'] || plugin['name']} would not compile: #{$!.message}"
-          @checkin[:errors] << build_report(plugin,:subject => "Plugin would not compile", :body=>"#{$!.message}\n\n#{$!.backtrace}")
-          return
-        end
+        if !third_party?(plugin)
+          debug "Compiling plugin..."
+          begin
+            eval( code_to_run,
+                  TOPLEVEL_BINDING,
+                  plugin['path'] || plugin['name'] )
+            info "Plugin compiled."
+          rescue Exception
+            raise if $!.is_a? SystemExit
+            error "Plugin #{plugin['path'] || plugin['name']} would not compile: #{$!.message}"
+            @checkin[:errors] << build_report(plugin,:subject => "Plugin would not compile", :body=>"#{$!.message}\n\n#{$!.backtrace}")
+            return
+          end
 
-        # Lookup any local options in plugin_config.properies as needed
-        options=(plugin['options'] || Hash.new)
-        options.each_pair do |k,v|
-          if v=~/^lookup:(.+)$/
-            lookup_key = $1.strip
-            if plugin_config[lookup_key]
-              options[k]=plugin_config[lookup_key]
-            else
-              info "Plugin #{id_and_name}: option #{k} appears to be a lookup, but we can't find #{lookup_key} in #{@plugin_config_path}"
+          # Lookup any local options in plugin_config.properies as needed
+          options=(plugin['options'] || Hash.new)
+          options.each_pair do |k,v|
+            if v=~/^lookup:(.+)$/
+              lookup_key = $1.strip
+              if plugin_config[lookup_key]
+                options[k]=plugin_config[lookup_key]
+              else
+                info "Plugin #{id_and_name}: option #{k} appears to be a lookup, but we can't find #{lookup_key} in #{@plugin_config_path}"
+              end
             end
           end
+        elsif munin?(plugin)
+          Plugin.last_defined = MuninPlugin
+        elsif nagios?(plugin)
+          Plugin.last_defined = NagiosPlugin
         end
 
         debug "Loading plugin..."
-        if job = Plugin.last_defined.load( last_run, (memory || Hash.new), options)
+        if job = third_party?(plugin) ? load_third_party(plugin) : Plugin.last_defined.load( last_run, (memory || Hash.new), options)
           info "Plugin loaded."
           debug "Running plugin..."
           begin
@@ -486,7 +494,8 @@ module Scout
       if Plugin.last_defined
         debug "Removing plugin code..."
         begin
-          Object.send(:remove_const, Plugin.last_defined.to_s.split("::").first)
+          klasses = Plugin.last_defined.to_s.split("::")
+          Object.send(:remove_const, klasses.include?("Scout") ? klasses.last : klasses.first) # munin and nagios plugins have "Scout::Munin/Nagios". don't want to remove 'Scout'.
           Plugin.last_defined = nil
           info "Plugin Removed."
         rescue

@@ -1,3 +1,7 @@
+# 5.9.8
+
+* Added Nagios plugin support via the `--nagios` flag.
+
 # 5.9.7.1
 
 * write a bit more information about system metrics in the realtime log
@@ -5,6 +9,7 @@
 # 5.9.7
 
 * Preliminary support for realtime compatibility with GO agent
+>>>>>>> master
 
 # 5.9.5
 
