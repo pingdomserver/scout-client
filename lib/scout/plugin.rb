@@ -170,10 +170,14 @@ module Scout
     #   counter(:rkbps, stats['rsect'] / 2, :per => :second)
     #   counter(:rpm, request_counter, :per => :minute)
     #   counter(:swap_ins, vmstat['pswpin'], :per => :second, :round => true)
+    #   counter(:internal_counter, stats['lockTime'], :per => :second, :report => false)
     #
     def counter(name, value, options = {}, &block)
       current_time = Time.now
 
+      do_report = options.key?(:report) ? options[:report] : true
+
+      result = nil
       if data = memory("_counter_#{name}")
         last_time, last_value = data[:time], data[:value]
         elapsed_seconds       = current_time - last_time
@@ -192,6 +196,8 @@ module Scout
             result = result / elapsed_seconds.to_f
           when :minute, 'minute'
             result = result / elapsed_seconds.to_f * 60.0
+          when nil
+            #nothing, raw counter
           else
             raise "Unknown option for ':per': #{options[:per].inspect}"
           end
@@ -203,13 +209,41 @@ module Scout
             result = (result * (10 ** options[:round])).round / (10 ** options[:round]).to_f
           end
 
-          report(name => result)
+          report(name => result) if do_report
         end
       else # report nil to reserve the metric name in rrd
         report(name => nil)
       end
 
       remember("_counter_#{name}" => { :time => current_time, :value => value })
+      return result
+    end
+
+    #
+    # Usage:
+    #
+    #   counter_ratio(:lock_ratio, lock_time, total_time)
+    #
+    def counter_ratio(name, value, divisor)
+      divisor_delta = counter("_ratio_divisor_#{name}", divisor, :report => false)
+      value_delta = counter("_ratio_value_#{name}", value, :report => false)
+      ratio(name, value_delta, divisor_delta)
+    end
+
+    #
+    # Usage:
+    #
+    #   ratio(:lock_ratio, lock_time_delta, total_time_delta)
+    #
+    def ratio(name, value_delta, divisor_delta)
+      if not value_delta.nil? and not divisor_delta.nil?
+        if value_delta == 0 or divisor_delta == 0
+          result = 0
+        else
+          result = 100.0 * value_delta.to_f / divisor_delta.to_f
+        end
+        report(name => result)
+      end
     end
 
     #
