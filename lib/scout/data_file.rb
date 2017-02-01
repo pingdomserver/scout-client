@@ -14,10 +14,18 @@ module Scout
       path+'.tmp'
     end
     
+    def is_windows
+      ENV['OS'] == 'Windows_NT'
+    end
+
     # saves the data file by (1) locking the file at +path+ to ensure other processes 
     # don't overlap (2) using an atomic write to ensure other processes always read a complete file.
     def save(content)
-      lock do
+      unless is_windows
+        lock do
+          atomic_write(content)
+        end
+      else
         atomic_write(content)
       end
     end
