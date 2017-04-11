@@ -144,8 +144,9 @@ module Scout
       if name.nil?
         data_for_server[:memory]
       else
-        @memory[name] ||
-        @memory[name.is_a?(String) ? name.to_sym : String(name)]
+        @memory.include?(name) ?
+          @memory[name] :
+          @memory[name.is_a?(String) ? name.to_sym : String(name)]
       end
     end
     
