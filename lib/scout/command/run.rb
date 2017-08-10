@@ -10,9 +10,9 @@ module Scout
         log.debug("Running Scout [#{Scout::VERSION}] with server_metrics [#{ServerMetrics::VERSION}] on #{@hostname}") if log
         log.debug("Configuration directory is #{configuration_directory} ") if log
         # TODO: too much external logic of command doing things TO server. This should be moved into the server class.
-        @scout = Scout::Server.new(server, key, history, log, server_name, @http_proxy, @https_proxy, @roles, @hostname, @environment)
+        @scout = Scout::Server.new(server, key, history, log, server_name, @http_proxy, @https_proxy, @roles, @hostname, @environment, @options)
         @scout.load_history
-        
+
         unless $stdin.tty?
           log.info "Sleeping #{@scout.sleep_interval} sec" if log
           sleep @scout.sleep_interval

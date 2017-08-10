@@ -1,3 +1,7 @@
+# 5.9.12
+
+* Passing options to Scout::Server
+
 # 5.9.8
 
 * Make validation of private plugins more robust
@@ -271,7 +275,7 @@
 
 # 5.0.3
 
-* fixed regression: Error when running `scout AGENT_KEY` without first running scout and manually entering the agent key 
+* fixed regression: Error when running `scout AGENT_KEY` without first running scout and manually entering the agent key
 
 # 5.0.2
 

@@ -1,4 +1,3 @@
-
 Dir.glob(File.join(File.dirname(__FILE__), *%w[.. .. vendor *])).each do |dir|
   $LOAD_PATH << File.join(dir,"lib")
 end
@@ -9,16 +8,16 @@ require "httpclient"
 
 module Scout
   class Server < Scout::ServerBase
-    # 
-    # A plugin cannot take more than DEFAULT_PLUGIN_TIMEOUT seconds to execute, 
+    #
+    # A plugin cannot take more than DEFAULT_PLUGIN_TIMEOUT seconds to execute,
     # otherwise, a timeout error is generated.  This can be overriden by
     # individual plugins.
-    # 
+    #
     DEFAULT_PLUGIN_TIMEOUT = 60
     #
     # A fuzzy range of seconds in which it is okay to rerun a plugin.
     # We consider the interval close enough at this point.
-    # 
+    #
     RUN_DELTA = 30
 
     attr_reader :new_plan
@@ -28,7 +27,7 @@ module Scout
     attr_reader :client_key
 
     # Creates a new Scout Server connection.
-    def initialize(server, client_key, history_file, logger=nil, server_name=nil, http_proxy='', https_proxy='', roles='', hostname=nil, environment='')
+    def initialize(server, client_key, history_file, logger=nil, server_name=nil, http_proxy='', https_proxy='', roles='', hostname=nil, environment='', options={})
       @server       = server
       @client_key   = client_key
       @history_file = history_file
@@ -40,6 +39,7 @@ module Scout
       @roles        = roles || ''
       @hostname     = hostname
       @environment  = environment
+      @options = options
       @plugin_plan  = []
       @plugins_with_signature_errors = []
       @directives   = {} # take_snapshots, interval, sleep_interval
@@ -69,7 +69,7 @@ module Scout
       if @history["plan_last_modified"] and @history["old_plugins"]
         headers["If-Modified-Since"] = @history["plan_last_modified"]
       end
-      get(url, "Could not ping #{url} for refresh info", headers) do |res|        
+      get(url, "Could not ping #{url} for refresh info", headers) do |res|
         @streamer_command = res["x-streamer-command"] # usually will be nil, but can be [start,abcd,1234,5678|stop]
         if res.is_a?(Net::HTTPNotModified)
           return false
@@ -103,7 +103,7 @@ module Scout
               body = Zlib::GzipReader.new(StringIO.new(body)).read
             end
             body_as_hash = JSON.parse(body)
-            
+
             temp_plugins=Array(body_as_hash["plugins"])
             # create a second array so the array we're iterating over doesn't mutate while we're iterating
             valid_plugins = temp_plugins.dup
@@ -176,7 +176,7 @@ module Scout
         name    = File.basename(plugin_path)
         options = if directives = @plugin_plan.find { |plugin| plugin['filename'] == name }
                      directives['options']
-                  else 
+                  else
                     nil
                   end
         begin
@@ -210,10 +210,10 @@ module Scout
     def ping_key
       (@history['directives'] || {})['ping_key']
     end
-    
+
     def client_key_changed?
       last_client_key=@history['last_client_key']
-      # last_client_key will be nil on versions <= 5.5.7. when the agent runs after the upgrade, it will no longer 
+      # last_client_key will be nil on versions <= 5.5.7. when the agent runs after the upgrade, it will no longer
       # be nil. don't want to aggressively reset the history file as it clears out memory values which may impact alerts.
       if last_client_key and client_key != last_client_key
         warn "The key associated with the history file has changed [#{last_client_key}] => [#{client_key}]."
@@ -222,8 +222,8 @@ module Scout
         false
       end
     end
-    
-    # need to load the history file first to determine if the key changed. 
+
+    # need to load the history file first to determine if the key changed.
     # if it has, reset.
     def recreate_history_if_client_key_changed
       if client_key_changed?
@@ -231,7 +231,7 @@ module Scout
         @history = YAML.load(File.read(@history_file))
       end
     end
-    
+
     # Returns the Scout public key for code verification.
     def scout_public_key
       return @scout_public_key if instance_variables.include?('@scout_public_key')
@@ -239,7 +239,7 @@ module Scout
       debug "Loaded scout-wide public key used for verifying code signatures (#{public_key_text.size} bytes)"
       @scout_public_key = OpenSSL::PKey::RSA.new(public_key_text)
     end
-    
+
     # Returns the account-specific public key if installed. Otherwise, nil.
     def account_public_key
       return @account_public_key if instance_variables.include?('@account_public_key')
@@ -255,13 +255,13 @@ module Scout
       end
       return @account_public_key
     end
-    
+
     # This is called in +run_plugins_by_plan+. When the agent starts its next run, it checks to see
     # if the key has changed. If so, it forces a refresh.
     def store_account_public_key
       @history['account_public_key'] = account_public_key.to_s
     end
-    
+
     def account_public_key_changed?
       @history['account_public_key'] != account_public_key.to_s
     end
@@ -337,7 +337,7 @@ module Scout
       collectors.each_pair do |key,klass|
         begin
           collector_previous_run = @history[:server_metrics][key]
-          collector = collector_previous_run.is_a?(Hash) ? klass.from_hash(collector_previous_run) : klass.new() # continue with last run, or just create new
+          collector = collector_previous_run.is_a?(Hash) ? klass.from_hash(collector_previous_run) : klass.new(@options) # continue with last run, or just create new
           res[key] = collector.run
           @history[:server_metrics][key] = collector.to_hash # store its state for next time
         rescue Exception => e
@@ -356,10 +356,10 @@ module Scout
         @checkin[:errors] << build_report(plugin,:subject => "Code Signature Error", :body => plugin['sig_error'])
       end
     end
-    
-    # 
-    # This is the heart of Scout.  
-    # 
+
+    #
+    # This is the heart of Scout.
+    #
     # First, it determines if a plugin is past interval and needs to be run.
     # If it is, it simply evals the code, compiling it.
     # It then loads the plugin and runs it with a PLUGIN_TIMEOUT time limit.
@@ -448,9 +448,9 @@ module Scout
                                               :subject => "Plugin failed to run",
                                               :body=>"#{$!.class}: #{$!.message}\n#{$!.backtrace.join("\n")}")
           end
-                    
+
           info "Plugin completed its run."
-          
+
           %w[report alert error summary].each do |type|
             plural  = "#{type}s".sub(/ys\z/, "ies").to_sym
             reports = data[plural].is_a?(Array) ? data[plural] :
@@ -462,9 +462,9 @@ module Scout
               @checkin[plural] << build_report(plugin, fields)
             end
           end
-          
+
           report_embedded_options(plugin,code_to_run)
-          
+
           @history["last_runs"].delete(plugin['name'])
           @history["memory"].delete(plugin['name'])
           @history["last_runs"][id_and_name] = run_time
@@ -500,7 +500,7 @@ module Scout
       end
       info "Plugin '#{plugin['name']}' processing complete."
     end
-    
+
     # Adds embedded options to the checkin if the plugin is manually installed
     # on this server.
     def report_embedded_options(plugin,code)
@@ -570,7 +570,7 @@ module Scout
       end
       info "History file loaded."
     end
-    
+
     # Called when a history file is determined to be corrupt / truncated / etc. Backup the existing file for later
     # troubleshooting and create a fresh history file.
     def backup_history_and_recreate(contents,message)
@@ -589,7 +589,7 @@ module Scout
       info "History file created."
     end
 
-    # Saves the history file to disk. 
+    # Saves the history file to disk.
     def save_history
       debug "Saving history file..."
       @history['last_client_key'] = client_key
@@ -598,7 +598,7 @@ module Scout
     end
 
     private
-    
+
     def build_report(plugin_hash, fields)
       { :plugin_id  => plugin_hash['id'],
         :created_at => Time.now.utc.strftime("%Y-%m-%d %H:%M:%S"),
