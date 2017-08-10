@@ -1,9 +1,9 @@
-
 Dir.glob(File.join(File.dirname(__FILE__), *%w[.. .. vendor *])).each do |dir|
   $LOAD_PATH << File.join(dir,"lib")
 end
 
 require "multi_json"
+require "pusher"
 require "httpclient"
 
 module Scout
@@ -105,7 +105,11 @@ module Scout
             body_as_hash = JSON.parse(body)
 
             temp_plugins=Array(body_as_hash["plugins"])
-            temp_plugins.each_with_index do |plugin,i|
+            # create a second array so the array we're iterating over doesn't mutate while we're iterating
+            valid_plugins = temp_plugins.dup
+            temp_plugins.each do |plugin|
+              # grab the index of this plugin in the valid_plugins array
+              valid_index = valid_plugins.index(plugin)
               signature=plugin['signature']
               id_and_name = "#{plugin['id']}-#{plugin['name']}".sub(/\A-/, "")
               if signature
@@ -116,12 +120,12 @@ module Scout
                     if !verify_public_key(account_public_key, decoded_signature, code)
                       info "#{id_and_name} signature verification failed for both the Scout and account public keys"
                       plugin['sig_error'] = "The code signature failed verification against both the Scout and account public key. Please ensure the public key installed at #{@account_public_key_path} was generated with the same private key used to sign the plugin."
-                      @plugins_with_signature_errors << temp_plugins.delete_at(i)
+                      @plugins_with_signature_errors << valid_plugins.delete_at(valid_index)
                     end
                   else
                     info "#{id_and_name} signature doesn't match!"
                     plugin['sig_error'] = "The code signature failed verification. Please place your account-specific public key at #{@account_public_key_path}."
-                    @plugins_with_signature_errors << temp_plugins.delete_at(i)
+                    @plugins_with_signature_errors << valid_plugins.delete_at(valid_index)
                   end
                 end
               # filename is set for local plugins. these don't have signatures.
@@ -130,11 +134,11 @@ module Scout
               else
                 info "#{id_and_name} has no signature!"
                 plugin['sig_error'] = "The code has no signature and cannot be verified."
-                @plugins_with_signature_errors << temp_plugins.delete_at(i)
+                @plugins_with_signature_errors << valid_plugins.delete_at(valid_index)
               end
             end
 
-            @plugin_plan = temp_plugins
+            @plugin_plan = valid_plugins
             @directives = body_as_hash["directives"].is_a?(Hash) ? body_as_hash["directives"] : Hash.new
             @history["plan_last_modified"] = res["last-modified"]
             @history["old_plugins"]        = @plugin_plan
@@ -314,7 +318,6 @@ module Scout
       end
       take_snapshot if @directives['take_snapshots']
       get_server_metrics
-      get_scoutd_payload
       process_signature_errors
       store_account_public_key
       checkin
@@ -343,36 +346,6 @@ module Scout
         end
       end
       @checkin[:server_metrics] = res
-    end
-
-    # Fetches a json bundle from scoutd so we can include it in the checkin data
-    # We set @checkin.collectors from the scoutd json data
-    def get_scoutd_payload
-      return unless Environment.scoutd_child?
-      begin
-        url = Environment.scoutd_payload_url
-        res,data=nil,nil
-        Timeout::timeout(6) do
-          uri = URI.parse(url)
-          http = Net::HTTP.new(uri.host,uri.port)
-          http.open_timeout=4 # allow for some time to connect
-          http.read_timeout=4
-
-          res = http.get(uri.path)
-        end
-
-        if !res.is_a?(Net::HTTPSuccess)
-          raise "res=#{res.inspect}, res.body=#{res.body.inspect}" # will be immediately caught below
-        end
-
-        # Data should be a JSON hash with a 'collectors' key
-        data_hash = JSON.parse(res.body)
-        @checkin[:collectors] = data_hash['collectors']
-
-      rescue Timeout::Error, Exception => e
-        error "#{e.is_a?(Timeout::Error) ? 'Timout' : 'Error'} when fetching scoutd payload, url: #{url} - #{e}"
-        return
-      end
     end
 
     # Reports errors if there are any plugins with invalid signatures and sets a flag
@@ -565,8 +538,7 @@ module Scout
                    :config_path      => File.expand_path(File.dirname(@history_file)),
                    :server_name      => @server_name,
                    :options          => Array.new,
-                   :server_metrics   => Hash.new,
-                   :collectors       => Hash.new }
+                   :server_metrics   => Hash.new }
     end
 
     def show_checkin(printer = :p)
@@ -648,11 +620,8 @@ module Scout
       post( urlify(:checkin),
             "Unable to check in with the server.",
             io.string,
-            { "Content-Type"     => "application/json",
-            "Content-Encoding" => "gzip" }
-        ) do |response|
-        puts Hash['success' => true, 'server_response' => response].to_json if Environment.scoutd_child?
-      end
+            "Content-Type"     => "application/json",
+            "Content-Encoding" => "gzip" )
     rescue Exception
       error "Unable to check in with the server."
       debug $!.class.to_s
