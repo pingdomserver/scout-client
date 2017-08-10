@@ -1,4 +1,4 @@
-# 5.9.9
+# 5.9.12
 
 * Passing options to Scout::Server
 
