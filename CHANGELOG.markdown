@@ -1,6 +1,54 @@
-# 5.9.8
+# 6.2.5
 
-* Make validation of private plugins more robust
+* Passing options to Scout::Server
+
+# 6.2.4
+
+* Update checkin URL
+
+# 6.2.3
+
+* Update URLs
+
+# 6.2.2
+
+* Revert to using descriptor 3 or 7 in realtime pipe instead of STDIN
+
+# 6.2.1
+
+* Change scout_streamer.log path to /var/log/scout if scoutd child.
+
+# 6.2.0
+
+* Fix realtime pipe for MRI >= 1.9.3
+
+# 6.1.0
+
+* Fetch collector stats from scoutd endpoint
+
+# 6.0.5
+
+* Don't sleep when tty or when forced
+
+# 6.0.4
+
+* Remove require 'rubygems' from lib/scout.rb
+
+# 6.0.3
+
+* Pass the server success/fail response to scoutd via json
+
+# 6.0.2
+
+* Disable response callback after checkin if not scoutd
+
+# 6.0.1
+
+* Ability to use as either rubygem or packaged with scoutd
+
+# 6.0.0
+
+* scoutd specific changes for scoutd, realtime, standalone/non-gem library. Not released as rubygem.
 
 # 5.9.7.1
 
@@ -271,7 +319,7 @@
 
 # 5.0.3
 
-* fixed regression: Error when running `scout AGENT_KEY` without first running scout and manually entering the agent key 
+* fixed regression: Error when running `scout AGENT_KEY` without first running scout and manually entering the agent key
 
 # 5.0.2
 

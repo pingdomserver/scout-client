@@ -97,6 +97,10 @@ module Scout
           options[:environment] = environment
         end
 
+        opts.on( "-i", "--ignored_devices IGNORED_DEVICES", String, "Regex for ignoring disk devices. " ) do |ignored_devices|
+          options[:ignored_devices] = ignored_devices
+        end
+
         opts.separator " "
         opts.separator "Common Options:"
         opts.separator "--------------------------------------------------------------------------"
@@ -184,6 +188,7 @@ module Scout
       @https_proxy    = options[:https_proxy] || ""
       @hostname       = options[:hostname] || Socket.gethostname
       @environment    = options[:environment] || ""
+      @ignored_devices = options[:ignored_devices]
       @options = options
       @args    = args
 
@@ -254,7 +259,7 @@ module Scout
         running = true
         pid = File.read(pid_file).strip.to_i rescue "unknown"
         if pid.is_a?(Fixnum)
-          if pid.zero? 
+          if pid.zero?
             running = false
           else
             begin
