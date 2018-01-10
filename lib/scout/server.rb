@@ -5,11 +5,9 @@ end
 
 require "multi_json"
 require "httpclient"
-require 'pry'
 
 module Scout
   class Server < Scout::ServerBase
-    LOCAL_PLUGIN_PATH = %(/opt/appoptics/etc/scout.d)
     #
     # A plugin cannot take more than DEFAULT_PLUGIN_TIMEOUT seconds to execute,
     # otherwise, a timeout error is generated.  This can be overriden by
@@ -67,17 +65,160 @@ module Scout
     #
     # This method has a couple of side effects:
     def fetch_plan
-      @plugin_plan = Dir.glob(File.join(LOCAL_PLUGIN_PATH, "[a-zA-Z]*.rb")).map do |file|
-        name = File.basename(file)
-        options = YAML.load File.read(file.gsub(/rb$/, 'yaml'))
-        {
-          'name'            => name,
-          'local_filename'  => name,
-          'origin'          => 'LOCAL',
-          'code'            => File.read(file),
-          'interval'        => 0,
-          'options'         => options
-        }
+      if @options[:local]
+        @plugin_plan = fetch_local_plugins(@options[:local])
+      else
+        fetch_remote_plan
+      end
+    end
+
+    #
+    # Retrieves the Plugin Plan from the server. This is the list of plugins
+    # to execute, along with all options.
+    #
+    # This method has a couple of side effects:
+    # 1) it sets the @plugin_plan with either A) whatever is in history, B) the results of the /plan retrieval
+    # 2) it sets @checkin_to = true IF so directed by the scout server
+    def fetch_remote_plan
+      if refresh?
+        url = urlify(:plan)
+        info "Fetching plan from server at #{url}..."
+        headers = {"x-scout-tty" => ($stdin.tty? ? 'true' : 'false')}
+        headers["x-scout-roles"] = @roles
+
+        get(url, "Could not retrieve plan from server.", headers) do |res|
+          begin
+            body = res.body
+            if res["Content-Encoding"] == "gzip" and body and not body.empty?
+              body = Zlib::GzipReader.new(StringIO.new(body)).read
+            end
+            body_as_hash = JSON.parse(body)
+
+            temp_plugins=Array(body_as_hash["plugins"])
+            # create a second array so the array we're iterating over doesn't mutate while we're iterating
+            valid_plugins = temp_plugins.dup
+            temp_plugins.each do |plugin|
+              # grab the index of this plugin in the valid_plugins array
+              valid_index = valid_plugins.index(plugin)
+              signature=plugin['signature']
+              id_and_name = "#{plugin['id']}-#{plugin['name']}".sub(/\A-/, "")
+              if signature
+                code=plugin['code'].gsub(/ +$/,'') # we strip trailing whitespace before calculating signatures. Same here.
+                decoded_signature=Base64.decode64(signature)
+                if !verify_public_key(scout_public_key, decoded_signature, code)
+                  if account_public_key
+                    if !verify_public_key(account_public_key, decoded_signature, code)
+                      info "#{id_and_name} signature verification failed for both the Scout and account public keys"
+                      plugin['sig_error'] = "The code signature failed verification against both the Scout and account public key. Please ensure the public key installed at #{@account_public_key_path} was generated with the same private key used to sign the plugin."
+                      @plugins_with_signature_errors << valid_plugins.delete_at(valid_index)
+                    end
+                  else
+                    info "#{id_and_name} signature doesn't match!"
+                    plugin['sig_error'] = "The code signature failed verification. Please place your account-specific public key at #{@account_public_key_path}."
+                    @plugins_with_signature_errors << valid_plugins.delete_at(valid_index)
+                  end
+                end
+              # filename is set for local plugins. these don't have signatures.
+              elsif plugin['filename']
+                plugin['code']=nil # should not have any code.
+              else
+                info "#{id_and_name} has no signature!"
+                plugin['sig_error'] = "The code has no signature and cannot be verified."
+                @plugins_with_signature_errors << valid_plugins.delete_at(valid_index)
+              end
+            end
+
+            @plugin_plan = valid_plugins
+            @directives = body_as_hash["directives"].is_a?(Hash) ? body_as_hash["directives"] : Hash.new
+            @history["plan_last_modified"] = res["last-modified"]
+            @history["old_plugins"]        = @plugin_plan
+            @history["directives"]         = @directives
+
+            info "Plan loaded.  (#{@plugin_plan.size} plugins:  " +
+                 "#{@plugin_plan.map { |p| p['name'] }.join(', ')})" +
+                 ". Directives: #{@directives.to_a.map{|a|  "#{a.first}:#{a.last}"}.join(", ")}"
+
+            @new_plan = true # used in determination if we should checkin this time or not
+
+            # Add local plugins to the plan.
+            @plugin_plan += fetch_local_plugins
+          rescue Exception =>e
+            fatal "Plan from server was malformed: #{e.message} - #{e.backtrace}"
+            exit
+          end
+        end
+      else
+        info "Plan not modified."
+        @plugin_plan = Array(@history["old_plugins"])
+        @plugin_plan += get_local_plugins
+        @directives = @history["directives"] || Hash.new
+
+      end
+      @plugin_plan.reject! { |p| p['code'].nil? }
+    end
+
+    def fetch_local_plugins(path = @local_plugin_path)
+      local_plugin_paths = Dir.glob(File.join(path,"[a-zA-Z]*.rb"))
+      local_plugin_paths.map do |plugin_path|
+        name    = File.basename(plugin_path)
+        options = fetch_plugin_options(plugin_path)
+        begin
+          plugin = {
+            'name'            => name,
+            'local_filename'  => name,
+            'origin'          => 'LOCAL',
+            'code'            => File.read(plugin_path),
+            'interval'        => 0,
+            'options'         => options
+          }
+          if !plugin['code'].include?('Scout::Plugin')
+            info "Local Plugin [#{plugin_path}] doesn't look like a Scout::Plugin. Ignoring."
+            nil
+          else
+            plugin
+          end
+        rescue => e
+          info "Error trying to read local plugin: #{plugin_path} -- #{e.backtrace.join('\n')}"
+          nil
+        end
+      end.compact
+    end
+
+    def fetch_plugin_options(plugin_path)
+      return read_plugin_options_from_file(plugin_path) if @options[:local]
+
+      if directives = @plugin_plan.find { |plugin| plugin['filename'] == name }
+         directives['options']
+      else
+        nil
+      end
+    end
+
+    def read_plugin_options_from_file(plugin_path)
+      file_name = plugin_path.gsub(/rb$/, 'yaml')
+
+      YAML.load(File.read(file_name))
+    end
+
+    def refresh?
+      return true if !ping_key or account_public_key_changed? # fetch the plan again if the account key is modified/created
+
+      url = URI.join(
+        @server.sub("https://","http://"), "/clients/#{ping_key}/ping.scout?roles=#{@roles}&hostname=#{URI.encode(@hostname)}&env=#{URI.encode(@environment)}"
+      )
+
+      headers = {"x-scout-tty" => ($stdin.tty? ? 'true' : 'false')}
+      if @history["plan_last_modified"] and @history["old_plugins"]
+        headers["If-Modified-Since"] = @history["plan_last_modified"]
+      end
+      get(url, "Could not ping #{url} for refresh info", headers) do |res|
+        @streamer_command = res["x-streamer-command"] # usually will be nil, but can be [start,abcd,1234,5678|stop]
+        if res.is_a?(Net::HTTPNotModified)
+          return false
+        else
+          info "Plan has been modified!"
+          return true
+        end
       end
     end
 

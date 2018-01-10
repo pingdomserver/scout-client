@@ -105,6 +105,10 @@ module Scout
           options[:json] = json
         end
 
+        opts.on("-l", "--local PATH", String, "Use local file path") do |local|
+          options[:local] = local
+        end
+
         opts.separator " "
         opts.separator "Common Options:"
         opts.separator "--------------------------------------------------------------------------"
