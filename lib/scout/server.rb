@@ -195,7 +195,7 @@ module Scout
     end
 
     def read_plugin_options_from_file(plugin_path)
-      file_name = plugin_path.gsub(/rb$/, 'yaml')
+      file_name = plugin_path.gsub(/rb$/, 'yml')
 
       YAML.load(File.read(file_name))
     end
