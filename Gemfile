@@ -14,6 +14,6 @@ group :test do
   gem "json"
   gem 'pry'
   gem 'rake'
-  gem 'pusher-client', git: 'https://github.com/dlanderson/pusher-ruby-client'
+  gem 'pusher-client', git: 'https://github.com/pingdomserver/pusher-ruby-client'
   gem 'timecop'
 end
