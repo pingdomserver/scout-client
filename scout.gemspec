@@ -14,8 +14,6 @@ Gem::Specification.new do |s|
 The scout gem reports metrics to server.pingdom.com, an easy-to-use hosted server monitoring service.
 END_DESC
 
-  s.rubyforge_project = "scout"
-
   s.files         = `git ls-files`.split("\n")
   s.test_files    = `git ls-files -- {test,spec,features}/*`.split("\n")
   s.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
