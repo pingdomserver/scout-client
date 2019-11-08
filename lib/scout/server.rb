@@ -152,6 +152,7 @@ module Scout
 
             # Add local plugins to the plan.
             @plugin_plan += get_local_plugins
+            @plugin_plan += get_munin_plugins
           rescue Exception =>e
             fatal "Plan from server was malformed: #{e.message} - #{e.backtrace}"
             exit
@@ -161,6 +162,7 @@ module Scout
         info "Plan not modified."
         @plugin_plan = Array(@history["old_plugins"])
         @plugin_plan += get_local_plugins
+        @plugin_plan += get_munin_plugins
         @directives = @history["directives"] || Hash.new
 
       end
@@ -194,6 +196,34 @@ module Scout
           else
             plugin
           end
+        rescue => e
+          info "Error trying to read local plugin: #{plugin_path} -- #{e.backtrace.join('\n')}"
+          nil
+        end
+      end.compact
+    end
+
+    def get_munin_plugins
+      @munin_plugin_path = '/etc/munin/plugins'
+      munin_plugin_path=Dir.glob(File.join(@munin_plugin_path,"*"))
+      munin_plugin_path.map do |plugin_path|
+        name    = File.basename(plugin_path)
+        options = if directives = @plugin_plan.find { |plugin| plugin['filename'] == name }
+                     directives['options']
+                  else 
+                    nil
+                  end
+        begin
+          plugin = {
+            'name'            => name,
+            'local_filename'  => name,
+            'origin'          => 'LOCAL',
+            'type'            => 'MUNIN',
+            'code'            => name,
+            'interval'        => 0,
+            'options'         => options
+          }
+          plugin
         rescue => e
           info "Error trying to read local plugin: #{plugin_path} -- #{e.backtrace.join('\n')}"
           nil
@@ -303,7 +333,8 @@ module Scout
     # @plugin_execution_plan is populated by calling fetch_plan
     def run_plugins_by_plan
       prepare_checkin
-      @plugin_plan.each do |plugin|
+      @plugin_plan.each_with_index do |plugin,i|
+        #next if plugin['name'] != 'diskstats'
         begin
           process_plugin(plugin)
         rescue Exception
@@ -397,34 +428,39 @@ module Scout
             plugin['origin'] = nil
           end
         end
-        debug "Compiling plugin..."
-        begin
-          eval( code_to_run,
-                TOPLEVEL_BINDING,
-                plugin['path'] || plugin['name'] )
-          info "Plugin compiled."
-        rescue Exception
-          raise if $!.is_a? SystemExit
-          error "Plugin #{plugin['path'] || plugin['name']} would not compile: #{$!.message}"
-          @checkin[:errors] << build_report(plugin,:subject => "Plugin would not compile", :body=>"#{$!.message}\n\n#{$!.backtrace}")
-          return
-        end
+        if plugin['type'].to_s != 'MUNIN'
+          debug "Compiling plugin..."
+          begin
+            eval( code_to_run,
+                  TOPLEVEL_BINDING,
+                  plugin['path'] || plugin['name'] )
+            info "Plugin compiled."
+          rescue Exception
+            raise if $!.is_a? SystemExit
+            error "Plugin #{plugin['path'] || plugin['name']} would not compile: #{$!.message}"
+            @checkin[:errors] << build_report(plugin,:subject => "Plugin would not compile", :body=>"#{$!.message}\n\n#{$!.backtrace}")
+            return
+          end
 
-        # Lookup any local options in plugin_config.properies as needed
-        options=(plugin['options'] || Hash.new)
-        options.each_pair do |k,v|
-          if v=~/^lookup:(.+)$/
-            lookup_key = $1.strip
-            if plugin_config[lookup_key]
-              options[k]=plugin_config[lookup_key]
-            else
-              info "Plugin #{id_and_name}: option #{k} appears to be a lookup, but we can't find #{lookup_key} in #{@plugin_config_path}"
+          # Lookup any local options in plugin_config.properies as needed
+          options=(plugin['options'] || Hash.new)
+          options.each_pair do |k,v|
+            if v=~/^lookup:(.+)$/
+              lookup_key = $1.strip
+              if plugin_config[lookup_key]
+                options[k]=plugin_config[lookup_key]
+              else
+                info "Plugin #{id_and_name}: option #{k} appears to be a lookup, but we can't find #{lookup_key} in #{@plugin_config_path}"
+              end
             end
           end
-        end
+        elsif plugin['type'].to_s == 'MUNIN'
+          Plugin.last_defined = MuninPlugin
+        end # if !munin
 
         debug "Loading plugin..."
         if job = Plugin.last_defined.load( last_run, (memory || Hash.new), options)
+          job.file_name = plugin['name'] if plugin['type'] == 'MUNIN'
           info "Plugin loaded."
           debug "Running plugin..."
           begin
@@ -490,7 +526,8 @@ module Scout
       if Plugin.last_defined
         debug "Removing plugin code..."
         begin
-          Object.send(:remove_const, Plugin.last_defined.to_s.split("::").first)
+          klasses = Plugin.last_defined.to_s.split("::")
+          Object.send(:remove_const, klasses.include?("Scout") ? klasses.last : klasses.first) # munin plugins have "Scout::Munin". don't want to remove 'Scout'
           Plugin.last_defined = nil
           info "Plugin Removed."
         rescue
