@@ -170,7 +170,7 @@ module Scout
     end
 
     def initialize(options, args)
-      @roles   = options[:roles]
+      @roles   = parse_roles( options[:roles] )
       @server  = options[:server]  || "https://server.pingdom.com/"
       @history = options[:history] ||
                  File.join( File.join( (File.expand_path("~") rescue "/"),
@@ -236,6 +236,24 @@ module Scout
     def usage
       @usage ||= Command.usage
     end
+
+    def parse_roles(roles='')
+      roles.split(",").each { |role|
+        newrole = sanitize_role_name( role )
+        newroles.push( newrole )
+
+        if newrole != role
+          log.warn "Role \"#{role}\" is not properly sanitized. Will be used as role \"#{newrole}\"." if log
+        end
+      }
+
+      @roles = newroles
+    end
+
+    def sanitize_role_name(role='')
+      role.downcase.gsub(/ /, '_').gsub(/[^a-z0-9:._-]/, '')
+    end
+
 
     def create_pid_file_or_exit
       pid_file = File.join(config_dir, "scout_client_pid.txt")
