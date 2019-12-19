@@ -192,6 +192,14 @@ module Scout
             result = result / elapsed_seconds.to_f
           when :minute, 'minute'
             result = result / elapsed_seconds.to_f * 60.0
+          when :hour, 'hour'
+            result = result / elapsed_seconds.to_f * 60.0 * 60
+          when :day, 'day'
+            result = result / elapsed_seconds.to_f * 60.0 * 60 * 24
+          when :month, 'month'
+            result = result / elapsed_seconds.to_f * 60.0 * 60 * 24 * 30
+          when :year, 'year'
+            result = result / elapsed_seconds.to_f * 60.0 * 60 * 24 * 30 * 365
           else
             raise "Unknown option for ':per': #{options[:per].inspect}"
           end
