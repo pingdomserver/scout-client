@@ -26,8 +26,13 @@ module Scout
 
       @pusher_auth_url = p_auth_url
       @chart_id = chart_id # Need to decide how to determine which chart id to auth against or use a new auth url for agents
-      # TODO - how can we use proxies with PusherClient?
-      @pusher_socket = PusherClient::Socket.new(p_key, {:auth_method => data_channel_auth, :logger => ENV['SCOUT_PUSHER_DEBUG'].nil? ? Logger.new(nil) : @logger, :encrypted => true})
+      pusher_logger = ENV['SCOUT_PUSHER_DEBUG'].nil? ? Logger.new(nil) : @logger
+      @pusher_socket = PusherClient::Socket.new(p_key, {
+        :auth_method => data_channel_auth,
+        :logger => pusher_logger,
+        :encrypted => true,
+        :http_proxy => http_proxy,
+      })
       @pusher_socket.connect(true) # connect to pusher
       @pusher_socket.subscribe(@streaming_key, {:user_id => p_user_id}) # the user_id for the private channel sent with the pusher auth data
 
@@ -96,7 +101,7 @@ module Scout
                :server_time=>Time.now.strftime("%I:%M:%S %p"),
                :server_unixtime => Time.now.to_i,
                :num_processes=>`ps -e | wc -l`.chomp.to_i,
-               :plugins=>plugins, 
+               :plugins=>plugins,
                :system_metrics => system_metric_data}
 
       # stream the data via pusherapp
@@ -188,7 +193,7 @@ module Scout
                              :class => plugin_hash['code_class'] }
 
         id_and_name = plugin_hash['id_and_name']
-        
+
         if(failure_count(id_and_name) < 2)
           begin
             Timeout.timeout(3, PluginTimeoutError) do
@@ -238,7 +243,7 @@ module Scout
       end
       system_metric_data
     end
-      
+
     # Compile instances of the plugins specified in the passed plugin_ids
     def compile_plugins(all_plugins,plugin_ids)
       num_classes_compiled=0
