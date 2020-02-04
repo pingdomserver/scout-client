@@ -22,6 +22,7 @@ END_DESC
   # specify any dependencies here; for example:
   # s.add_development_dependency "rspec"
   s.add_runtime_dependency "elif"
+  s.add_runtime_dependency "socksify", "~> 1.7.1"
   s.add_runtime_dependency "server_metrics",">= 1.2.18"
 
   # Include git submodule files - borrowed from https://gist.githubusercontent.com/mattconnolly/5875987/raw/gem-with-git-submodules.gemspec

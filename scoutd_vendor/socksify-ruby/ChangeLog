@@ -1,0 +1,75 @@
+2008-02-28
+SOCKSify Ruby 1.0.0
+===================
+* Initial release
+
+2008-03-10
+SOCKSify Ruby 1.0.1
+===================
+* Gem packaging fix
+  (thanks to Patrick Sinclair)
+
+2008-04-17
+SOCKSify Ruby 1.1.0
+===================
+* TCPSocket::socks_ignores
+  (idea by Patrick Sinclair)
+
+2008-04-18
+SOCKSify Ruby 1.2.0
+===================
+* Use check.torproject.org in tests
+
+2011-02-22
+SOCKSify Ruby 1.3.0
+===================
+* Net::HTTP::SOCKSProxy
+
+2011-03-31
+SOCKSify Ruby 1.4.0
+===================
+* Socksify.proxy
+  (thanks to Yuichi Tateno)
+
+2011-06-07
+SOCKSify Ruby 1.4.1
+===================
+* default socks_ignores ||= %w(localhost)
+  (idea by Leonid Shevtsov)
+
+2012-06-22
+SOCKSify Ruby 1.5.0
+===================
+* allow username/password authorization
+  (thanks to David Dollar)
+
+2014-08-25
+SOCKSify Ruby 1.6.0
+===================
+* Ruby 2.0 and 2.1 compatibility.
+* fix bug in authentication header
+  (thanks to David Dollar)
+
+2015-07-31
+SOCKSify Ruby 1.7.0
+===================
+* Look up port in /etc/services by name if necessary
+* Helpful error message when client receives nothing from server during
+authentication
+  (thanks to Bachue Zhou)
+* Fix unused variable warning
+  (thanks to Florin Asavoaie)
+
+2017-02-24
+SOCKSify Ruby 1.7.1
+===================
+* Send requests in one call
+  For compatibility with shadowsocks <=3.0.3
+  (thanks to Yilin Chen)
+
+unreleased
+SOCKSify Ruby 1.7.2
+===================
+* Fix Socksify::debug = false
+  Previously, debug was enabled if any value was assigned to Socksify::debug
+  (thanks to Dennis Blommesteijn)

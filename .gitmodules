@@ -7,3 +7,7 @@
 [submodule "scoutd_vendor/server_metrics"]
 	path = scoutd_vendor/server_metrics
 	url = https://github.com/scoutserver/server_metrics
+[submodule "socksify-ruby"]
+	path = scoutd_vendor/socksify-ruby
+	url = https://github.com/astro/socksify-ruby
+	tag = v1.7.1
