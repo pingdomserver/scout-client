@@ -39,10 +39,15 @@ module Scout
     end
 
     def build_socks_proxy(uri, proxy_uri)
-      Net::HTTP.SOCKSProxy(
+      http = Net::HTTP.SOCKSProxy(
         proxy_uri.host,
         proxy_uri.port
       ).new(uri.host, uri.port)
+      if proxy_uri.user || proxy_uri.password
+        TCPSocket::socks_username = proxy_uri.user
+        TCPSocket::socks_password = proxy_uri.password
+      end
+      http
     end
   end
 end
